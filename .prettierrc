@@ -1,0 +1,17 @@
+{
+  "printWidth": 120,
+  "tabWidth": 4,
+  "semi": true,
+  "singleQuote": false,
+  "explicitTypes": "preserve",
+  "overrides": [
+    {
+      "files": "*.js",
+      "options": {
+        "tabWidth": 2,
+        "semi": true,
+        "singleQuote": true
+      }
+    }
+  ]
+}
