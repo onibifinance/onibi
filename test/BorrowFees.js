@@ -1,4 +1,4 @@
-const { ethers, network} = require('hardhat');
+const { ethers, network } = require('hardhat');
 const { expect } = require('chai');
 const deploy = require('./deploy');
 const BigNumber = require('bignumber.js');
@@ -8,7 +8,7 @@ let deployment;
 describe('Borrow Fees Rate', () => {
   beforeEach(async () => {
     await network.provider.request({
-      method: "hardhat_reset",
+      method: 'hardhat_reset',
       params: [],
     });
 
@@ -95,12 +95,9 @@ describe('Borrow Fees Rate', () => {
     const rSlope2 = new BigNumber(75e16); // 75%
 
     // adjust interest model
-    await deployment.oniPool.connect(deployer).setInterestParams(
-      uOptimal.toString(10),
-      borrowBase.toString(10),
-      rSlope1.toString(10),
-      rSlope2.toString(10),
-    )
+    await deployment.oniPool
+      .connect(deployer)
+      .setInterestParams(uOptimal.toString(10), borrowBase.toString(10), rSlope1.toString(10), rSlope2.toString(10));
 
     // supply some BEANs
     await deployment.oniBean.connect(alice).mint(beanToSupply.toString(10));

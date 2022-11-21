@@ -258,10 +258,7 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     // @dev the same as borrow function, but with ether (msg.value)
-    function borrowETH(
-        address _borrower,
-        uint256 _beanAmount
-    ) external payable nonReentrant {
+    function borrowETH(address _borrower, uint256 _beanAmount) external payable nonReentrant {
         if (msg.value > 0) {
             // update asset info
             totalDeposited = totalDeposited.add(msg.value);
@@ -296,6 +293,32 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // withdraw asset if clean debts
         if (accountInfo[msg.sender].totalDebts == 0) {
             IERC20(assetInfo.token).transfer(msg.sender, accountInfo[msg.sender].totalAsset);
+
+            totalDeposited = totalDeposited.sub(accountInfo[msg.sender].totalAsset);
+            accountInfo[msg.sender].totalAsset = 0;
+        }
+
+        emit Repay(msg.sender, _beanAmount);
+    }
+
+    // @dev same as repay, but receive ETH
+    function repayETH(uint256 _beanAmount) external nonReentrant {
+        _beanAmount = Math.min(_beanAmount, accountInfo[msg.sender].totalDebts);
+
+        // update debts
+        totalDebts = totalDebts.sub(_beanAmount);
+        accountInfo[msg.sender].totalDebts = accountInfo[msg.sender].totalDebts.sub(_beanAmount);
+
+        IERC20(bean).safeTransferFrom(msg.sender, address(this), _beanAmount);
+        IERC20(bean).approve(oniBean, 0);
+        IERC20(bean).approve(oniBean, _beanAmount);
+        OniBean(oniBean).poolRepay(_beanAmount);
+
+        // withdraw asset if clean debts
+        if (accountInfo[msg.sender].totalDebts == 0) {
+            // withdraw from WETH
+            WETH9(assetInfo.token).withdraw(accountInfo[msg.sender].totalAsset);
+            payable(address(msg.sender)).transfer(accountInfo[msg.sender].totalAsset);
 
             totalDeposited = totalDeposited.sub(accountInfo[msg.sender].totalAsset);
             accountInfo[msg.sender].totalAsset = 0;

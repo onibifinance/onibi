@@ -1,4 +1,4 @@
-const { ethers, network} = require('hardhat');
+const { ethers, network } = require('hardhat');
 const { expect } = require('chai');
 const deploy = require('./deploy');
 const BigNumber = require('bignumber.js');
@@ -8,7 +8,7 @@ let deployment;
 describe('OniBean', () => {
   beforeEach(async () => {
     await network.provider.request({
-      method: "hardhat_reset",
+      method: 'hardhat_reset',
       params: [],
     });
 

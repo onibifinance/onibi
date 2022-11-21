@@ -8,7 +8,7 @@ let deployment;
 describe('OniPool', () => {
   beforeEach(async () => {
     await network.provider.request({
-      method: "hardhat_reset",
+      method: 'hardhat_reset',
       params: [],
     });
 
@@ -80,9 +80,7 @@ describe('OniPool', () => {
     const wethToDeposit = new BigNumber(1e18); // 1 WETH
 
     await deployment.oniBean.connect(bob).mint(beanToSupply.toString(10));
-    await deployment.oniPool
-      .connect(bob)
-      .borrow(bob.address, wethToDeposit.toString(10), beanToBorrow.toString(10));
+    await deployment.oniPool.connect(bob).borrow(bob.address, wethToDeposit.toString(10), beanToBorrow.toString(10));
 
     const accountBorrowInfo = await deployment.oniPool.getAccountBorrowInfo(bob.address);
     expect(accountBorrowInfo.debtsBeans_.toString()).equal(new BigNumber(1000e6).toString(10));
