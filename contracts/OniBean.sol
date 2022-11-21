@@ -93,7 +93,7 @@ contract OniBean is Ownable, ERC20Votes, ReentrancyGuard {
     function poolBorrow(uint256 _amountBean) external onlyPool {
         IERC20(bean).safeTransfer(msg.sender, _amountBean);
 
-        totalDebts = totalDebts.add(_amountBean);
+        totalDebts = totalDebts > _amountBean ? totalDebts.add(_amountBean) : 0;
     }
 
     // @dev pools repay BEAN, reduce debts
