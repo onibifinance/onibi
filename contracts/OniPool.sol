@@ -17,6 +17,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "./OniBean.sol";
+import "./Swapper.sol";
 import "./library/WETH9.sol";
 import "./library/ChainLinkFeed.sol";
 
@@ -26,25 +27,25 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    uint256 private constant BASE_RATE = 1e18;
+    uint256 internal constant BASE_RATE = 1e18;
 
     // interest model
-    uint256 private constant DEFAULT_BORROW_BASE_RATE = 15e15; // 1.5%
-    uint256 private constant DEFAULT_OPTIMAL_UTILIZATION_RATE = 60e16; // 60%
-    uint256 private constant DEFAULT_R_SLOPE_1 = 1e16; // 1%
-    uint256 private constant DEFAULT_R_SLOPE_2 = 80e16; // 80%
+    uint256 internal constant DEFAULT_BORROW_BASE_RATE = 15e15; // 1.5%
+    uint256 internal constant DEFAULT_OPTIMAL_UTILIZATION_RATE = 60e16; // 60%
+    uint256 internal constant DEFAULT_R_SLOPE_1 = 1e16; // 1%
+    uint256 internal constant DEFAULT_R_SLOPE_2 = 80e16; // 80%
 
     // reserve rate
-    uint256 private constant RESERVE_RATE = 10e16; // 10%
+    uint256 internal constant RESERVE_RATE = 10e16; // 10%
 
     // borrow up-to COLLATERAL_RATE collateral asset USD value
-    uint256 private constant COLLATERAL_RATE = 90e16; // 90%
+    uint256 internal constant COLLATERAL_RATE = 90e16; // 90%
 
     // treasury fees
-    uint256 private constant TREASURY_FEE_RATE = 10e16; // 10% borrow fees
+    uint256 internal constant TREASURY_FEE_RATE = 10e16; // 10% borrow fees
 
     // liquidation fees
-    uint256 private constant LIQUIDATION_PENALTY = 1e16; // 1% borrowing position
+    uint256 internal constant LIQUIDATION_INCENTIVE = 20e16; // 20% BEAN profit
 
     struct InterestParams {
         uint256 borrowBaseRate;
@@ -79,6 +80,9 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     // @dev oniBEAN token address
     address public oniBean;
 
+    // @dev swapper helps to convert tokens
+    address public swapper;
+
     // @dev treasury address
     address public treasury;
 
@@ -95,12 +99,10 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     event Repay(address indexed borrower, uint256 repayAmount);
     event Liquidate(address indexed liquidator, address indexed borrower, uint256 debtsAmount, uint256 feesAmount);
 
-    // @dev for receive ether
-    receive() external payable {}
-
     function initialize(
         address _bean,
         address _oniBean,
+        address _swapper,
         address _asset,
         address _assetPriceFeed,
         address _treasury,
@@ -114,6 +116,7 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         bean = _bean;
         oniBean = _oniBean;
+        swapper = _swapper;
         assetInfo.token = _asset;
         assetInfo.priceFeed = _assetPriceFeed;
         treasury = _treasury;
@@ -239,7 +242,7 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address _borrower,
         uint256 _assetAmount,
         uint256 _beanAmount
-    ) external nonReentrant {
+    ) external payable virtual nonReentrant {
         if (_assetAmount > 0) {
             // update asset info
             totalDeposited = totalDeposited.add(_assetAmount);
@@ -257,28 +260,8 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         emit Borrow(_borrower, _assetAmount, beanAmount_, feesAmount_);
     }
 
-    // @dev the same as borrow function, but with ether (msg.value)
-    function borrowETH(address _borrower, uint256 _beanAmount) external payable nonReentrant {
-        if (msg.value > 0) {
-            // update asset info
-            totalDeposited = totalDeposited.add(msg.value);
-            accountInfo[_borrower].totalAsset = accountInfo[_borrower].totalAsset.add(msg.value);
-
-            // deposit WETH
-            WETH9(assetInfo.token).deposit{value: msg.value}();
-        }
-
-        uint256 beanAmount_;
-        uint256 feesAmount_;
-        if (_beanAmount > 0) {
-            (beanAmount_, feesAmount_) = _borrowBean(_borrower, _beanAmount);
-        }
-
-        emit Borrow(_borrower, msg.value, beanAmount_, feesAmount_);
-    }
-
     // @dev borrowers repay BEAN, return asset if repay all debts
-    function repay(uint256 _beanAmount) external nonReentrant {
+    function repay(uint256 _beanAmount) external virtual nonReentrant {
         _beanAmount = Math.min(_beanAmount, accountInfo[msg.sender].totalDebts);
 
         // update debts
@@ -301,55 +284,40 @@ contract OniPool is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         emit Repay(msg.sender, _beanAmount);
     }
 
-    // @dev same as repay, but receive ETH
-    function repayETH(uint256 _beanAmount) external nonReentrant {
-        _beanAmount = Math.min(_beanAmount, accountInfo[msg.sender].totalDebts);
-
-        // update debts
-        totalDebts = totalDebts.sub(_beanAmount);
-        accountInfo[msg.sender].totalDebts = accountInfo[msg.sender].totalDebts.sub(_beanAmount);
-
-        IERC20(bean).safeTransferFrom(msg.sender, address(this), _beanAmount);
-        IERC20(bean).approve(oniBean, 0);
-        IERC20(bean).approve(oniBean, _beanAmount);
-        OniBean(oniBean).poolRepay(_beanAmount);
-
-        // withdraw asset if clean debts
-        if (accountInfo[msg.sender].totalDebts == 0) {
-            // withdraw from WETH
-            WETH9(assetInfo.token).withdraw(accountInfo[msg.sender].totalAsset);
-            payable(address(msg.sender)).transfer(accountInfo[msg.sender].totalAsset);
-
-            totalDeposited = totalDeposited.sub(accountInfo[msg.sender].totalAsset);
-            accountInfo[msg.sender].totalAsset = 0;
-        }
-
-        emit Repay(msg.sender, _beanAmount);
-    }
-
     // @dev liquidate borrowing position
-    // liquidator transfers BEAN and repay borrowing debts
-    // liquidator receive 100% collateral asset of borrowing position
-    function liquidate(address _borrower) external nonReentrant {
+    // caller trigger to sell assets for BEAN
+    function liquidate(address _borrower) external virtual nonReentrant {
         (, , uint256 debtsBeans_, uint256 health_) = getAccountBorrowInfo(_borrower);
         require(health_ < 1e6, "not yet");
 
-        uint256 penaltyFees = debtsBeans_.mul(LIQUIDATION_PENALTY).div(1e18);
-        uint256 beanAmount = debtsBeans_.add(penaltyFees);
+        // sell asset for BEAN use swapper
+        IERC20(assetInfo.token).approve(swapper, 0);
+        IERC20(assetInfo.token).approve(swapper, accountInfo[_borrower].totalAsset);
+        Swapper(swapper).sellAsset(assetInfo.token, accountInfo[_borrower].totalAsset);
+        uint256 beanCollected = IERC20(bean).balanceOf(address(this));
 
-        IERC20(bean).safeTransferFrom(msg.sender, address(this), beanAmount);
+        uint256 beanProfit;
 
-        _distributeFees(penaltyFees);
+        if (beanCollected > debtsBeans_) {
+            // we have profit
+            beanProfit = beanCollected.sub(debtsBeans_);
+
+            uint256 beanIncentive = beanProfit.mul(LIQUIDATION_INCENTIVE).div(1e18);
+            uint256 beanFees = beanProfit.sub(beanIncentive);
+
+            _distributeFees(beanFees);
+            IERC20(bean).transfer(msg.sender, beanIncentive);
+
+            beanCollected = debtsBeans_;
+        }
 
         IERC20(bean).approve(oniBean, 0);
-        IERC20(bean).approve(oniBean, debtsBeans_);
-        OniBean(oniBean).poolRepay(debtsBeans_);
-
-        IERC20(assetInfo.token).safeTransfer(msg.sender, accountInfo[_borrower].totalAsset);
+        IERC20(bean).approve(oniBean, beanCollected);
+        OniBean(oniBean).poolRepay(beanCollected);
 
         delete accountInfo[_borrower];
 
-        emit Liquidate(msg.sender, _borrower, debtsBeans_, penaltyFees);
+        emit Liquidate(msg.sender, _borrower, beanCollected, beanProfit);
     }
 
     function _borrowBean(address _borrower, uint256 _beanAmount)

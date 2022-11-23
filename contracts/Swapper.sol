@@ -13,7 +13,6 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "./library/CurveLib.sol";
-import "hardhat/console.sol";
 
 interface UsdtERC20 {
     function approve(address spender, uint value) external;
