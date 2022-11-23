@@ -5,7 +5,8 @@
   "license": "MIT",
   "scripts": {
     "compile": "hardhat compile",
-    "pretty": "prettier --write ./contracts"
+    "pretty": "prettier --write ./contracts",
+    "test": "hardhat test"
   },
   "dependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.5",

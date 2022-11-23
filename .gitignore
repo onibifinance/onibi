@@ -12,6 +12,7 @@ build
 flatten
 artifacts
 cache
+test
 
 # Dependency directories
 node_modules/

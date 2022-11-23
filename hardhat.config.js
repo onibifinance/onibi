@@ -10,7 +10,10 @@ require("@nomiclabs/hardhat-waffle");
 module.exports = {
   networks: {
     hardhat: {
-      accountsBalance: "1000000000000000000000000000000000"
+      forking: {
+        url: 'https://rpc.ankr.com/eth',
+        blockNumber: 16034276,
+      }
     },
   },
   mocha: {

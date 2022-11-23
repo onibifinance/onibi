@@ -22,8 +22,8 @@ interface CurveExchange {
 
 interface CurveExchangeETH {
     function exchange(
-        uint256 fromToken,
-        uint256 toToken,
+        int256 fromToken,
+        int256 toToken,
         uint256 amount,
         uint256 minAmount,
         bool useETH
