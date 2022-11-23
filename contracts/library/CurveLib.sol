@@ -13,17 +13,18 @@ interface CurveExchange {
     function add_liquidity(uint256[3] memory amounts, uint256 minAmount) external;
 
     function exchange(
-        uint256 fromToken,
-        uint256 toToken,
+        int128 fromToken,
+        int128 toToken,
         uint256 amount,
-        uint256 minAmount
+        uint256 minAmount,
+        address receiver
     ) external;
 }
 
 interface CurveExchangeETH {
     function exchange(
-        int256 fromToken,
-        int256 toToken,
+        uint256 fromToken,
+        uint256 toToken,
         uint256 amount,
         uint256 minAmount,
         bool useETH
