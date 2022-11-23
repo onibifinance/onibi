@@ -56,8 +56,6 @@ contract Swapper is Initializable {
 
             CurveExchange(CURVE_BEAN_3CRV_POOL).exchange(1, 0, crv3Balance, 0);
 
-            console.log(IERC20(BEAN).balanceOf(address(this)));
-
             IERC20(BEAN).transfer(msg.sender, IERC20(BEAN).balanceOf(address(this)));
         }
     }
